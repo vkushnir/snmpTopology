@@ -1,0 +1,33 @@
+# Binary Files
+*.com
+*.exe
+*.dll
+
+# Compiled Stuff
+*.dcu
+*.drc
+*.map
+
+# Project Files
+__history
+*.local
+*.identcache
+*.~*~
+
+*.ini
+# Debug Build
+Win32/Debug/*
+Win64/Debug/*
+
+# Realiase Build
+!Win32/Release/*
+Win32/Release/*.dcu
+Win32/Release/*.drc
+Win32/Release/*.map
+!Win64/Release/*
+Win64/Release/*.dcu
+Win64/Release/*.drc
+Win64/Release/*.map
+
+# Resources
+Images/*
