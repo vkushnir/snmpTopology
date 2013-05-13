@@ -46,19 +46,10 @@ object frmMain: TfrmMain
     TabOrder = 1
     OnGetText = vstDevicesGetText
     OnGetHint = vstDevicesGetHint
-    ExplicitTop = -6
     Columns = <>
   end
-  object idSNMP: TIdSNMP
-    Active = True
-    Host = '10.16.96.101'
-    ReceiveTimeout = 5000
-    Community = 'skysilk'
-    Left = 8
-    Top = 8
-  end
   object Menu: TMainMenu
-    Left = 56
+    Left = 8
     Top = 8
     object mFile: TMenuItem
       Caption = '&File'

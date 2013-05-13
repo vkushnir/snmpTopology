@@ -87,6 +87,16 @@
             <FormType>dfm</FormType>
         </DCCReference>
         <DCCReference Include="Utils.pas"/>
+        <DCCReference Include="Synapse\asn1util.pas"/>
+        <DCCReference Include="Synapse\blcksock.pas"/>
+        <DCCReference Include="Synapse\synacode.pas"/>
+        <DCCReference Include="Synapse\synacrypt.pas"/>
+        <DCCReference Include="Synapse\synaip.pas"/>
+        <DCCReference Include="Synapse\synautil.pas"/>
+        <DCCReference Include="Synapse\synafpc.pas"/>
+        <DCCReference Include="Synapse\synsock.pas"/>
+        <DCCReference Include="Synapse\snmpsend.pas"/>
+        <None Include="Synapse\sswin32.inc"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>
