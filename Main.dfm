@@ -44,8 +44,11 @@ object frmMain: TfrmMain
     ParentShowHint = False
     ShowHint = True
     TabOrder = 1
+    OnDblClick = vstDevicesDblClick
     OnGetText = vstDevicesGetText
-    OnGetHint = vstDevicesGetHint
+    OnNodeDblClick = vstDevicesNodeDblClick
+    ExplicitLeft = -8
+    ExplicitTop = -6
     Columns = <>
   end
   object Menu: TMainMenu

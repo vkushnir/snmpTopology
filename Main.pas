@@ -22,15 +22,23 @@ type
     snmpID: String;
     Descr: String;
     MAC: TMAC;
-    MACList: array of TMAC;
+    Node: PVirtualNode;
+    Weight: Integer;
+  end;
+  TPortMAC = record
+    Port: Integer;
+    MAC: TMAC;
   end;
   TDevice = record
     IP: TIP;
     MAC: TMAC;
     sysDescr, sysContact, sysName, sysLocation: String;
     Ports: array of TPort;
-    MACList: array of TMAC;
+    MACList: array of TPortMAC;
+    Node: PVirtualNode;
+    MaxPort, MinPort: Integer;
   end;
+  PDevice = ^TDevice;
   TfrmMain = class(TForm)
     Memo: TMemo;
     vstDevices: TVirtualStringTree;
@@ -44,17 +52,26 @@ type
     procedure mScanClick(Sender: TObject);
     procedure vstDevicesGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
       Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
-    procedure vstDevicesGetHint(Sender: TBaseVirtualTree; Node: PVirtualNode;
-      Column: TColumnIndex; var LineBreakStyle: TVTTooltipLineBreakStyle;
-      var HintText: string);
     procedure mToolsClick(Sender: TObject);
+    procedure vstDevicesDblClick(Sender: TObject);
+    procedure vstDevicesNodeDblClick(Sender: TBaseVirtualTree;
+      const HitInfo: THitInfo);
   private
     cfg: TINIFile;
     snmpVersion: Integer;
     snmpRO: String;
     mngtVlan: String;
-    function getDeviceDescr (var Device: TDevice): Boolean;
+    function getDeviceDescr (var Device: TDevice; Vlan: String = '1'): Boolean;
     function getDevicePorts (var Device: TDevice; Vlan: String = ''): Boolean;
+    function isChildDevice (RootDevice, TestDevice: TDevice): Boolean; overload;
+    function isChildDevice (RootDevice, TestDevice: TDevice; var Port: Integer): Boolean; overload;
+    function isChildDevice (RootDevice: TDevice; TestMAC: TMAC): Boolean; overload;
+    function isChildDevice (RootDevice: TDevice; TestMAC: TMAC; var Port: Integer): Boolean; overload;
+    function MaxPort (Device: PDevice): Integer;
+    function MinPort (Device: PDevice): Integer;
+    procedure ScanChilds (nodeRoot: PVirtualNode; macRoot: TMAC; nodesDevices: array of PVirtualNode);
+    procedure SortChilds (var Neighbors: array of PDevice);
+    procedure FindPortWeights (rootMAC: TMAC; Neighbors: array of PDevice);
   public
     ipRoot: TDevice;
     ipRange: array of TDevice;
@@ -89,7 +106,140 @@ begin
 end;
 
 // **** Utilites ****
-function TfrmMain.getDeviceDescr (var Device: TDevice): Boolean;
+function TfrmMain.MaxPort (Device: PDevice): Integer;
+var
+  i, MaxWeight: Integer;
+begin
+  Result := -1;
+  MaxWeight := -MAXINT;
+  for i := 0 to High(Device.Ports) do
+    if Device.Ports[i].Weight > MaxWeight then begin
+      MaxWeight := Device.Ports[i].Weight;
+      Result := i;
+    end;
+end;
+function TfrmMain.MinPort (Device: PDevice): Integer;
+var
+  i, MinWeight: Integer;
+begin
+  Result := -1;
+  MinWeight := MAXINT;
+  for i := 0 to High(Device.Ports) do
+    if Device.Ports[i].Weight < MinWeight then begin
+      MinWeight := Device.Ports[i].Weight;
+      Result := i;
+    end;
+end;
+
+procedure TfrmMain.SortChilds (var Neighbors: array of PDevice);
+var
+  i, n, p, iMax, nMax: Integer;
+  swap: PDevice;
+begin
+  for i := 0 to High(Neighbors) do
+    for n := i + 1 to High(Neighbors) do begin
+      iMax := Neighbors[i].Ports[Neighbors[i].MaxPort].Weight;
+      nMax := Neighbors[n].Ports[Neighbors[n].MaxPort].Weight;
+      if iMax > nMax then begin
+        swap := Neighbors[i];
+        Neighbors[i] := Neighbors[n];
+        Neighbors[n] := swap;
+      end;
+    end;
+end;
+
+procedure TfrmMain.FindPortWeights (rootMAC: TMAC; Neighbors: array of PDevice);
+var
+  p, i, m, d: Integer;
+  mac: TMAC;
+begin
+  for d := 0 to High(Neighbors) do begin
+    for m := 0 to High(Neighbors[d].MACList) do begin
+      for i := 0 to High(Neighbors) do begin
+        if (i <> d) and (Neighbors[d].MACList[m].MAC = Neighbors[i].MAC) then
+          Dec(Neighbors[d].Ports[Neighbors[d].MACList[m].Port].Weight);
+      end;
+    end;
+  end;
+  for d := 0 to High(Neighbors) do begin
+    for m := 0 to High(Neighbors[d].MACList) do begin
+      if Neighbors[d].MACList[m].MAC = rootMAC then begin
+        Neighbors[d].Ports[Neighbors[d].MACList[m].Port].Weight := Neighbors[d].Ports[Neighbors[d].MACList[m].Port].Weight * -1;
+        Inc(Neighbors[d].Ports[Neighbors[d].MACList[m].Port].Weight);
+      end;
+    end;
+  end;
+  for i := 0 to High(Neighbors) do begin
+    Neighbors[i].MaxPort := MaxPort(Neighbors[i]);
+    Neighbors[i].MinPort := MinPort(Neighbors[i]);
+  end;
+end;
+procedure TfrmMain.ScanChilds (nodeRoot: PVirtualNode; macRoot: TMAC; nodesDevices: array of PVirtualNode);
+var
+  i: Integer;
+  dataRoot, dataChild, dataPort, dataDevice, data, dataUnsorted: ^TTreeData;
+  n, d, p, m, rootPort, devicePort: Integer;
+  nodeChild, nodePort, nodeDevice, node, nodeUnsorted, tNode: PVirtualNode;
+begin
+   for i :=0  to High(nodesDevices) do begin
+    dataDevice := vstDevices.GetNodeData(nodesDevices[i]);
+    if (not (ipRange[dataDevice.idx].MAC = macRoot)) and
+       isChildDevice(ipRange[dataDevice.idx], macRoot, devicePort) then begin
+      with vstDevices do begin
+        nodeChild := AddChild(nodeRoot);
+        dataChild := GetNodeData(nodeChild);
+        dataChild.Parent := nodesDevices[i];
+        dataChild.idx := devicePort;
+        dataChild.oType := otPort;
+        ipRange[dataDevice.idx].Ports[devicePort].Node := nodeChild;
+        MoveTo(nodesDevices[i], nodeChild, amAddChildLast, false);
+      end;
+      LogEOL('.');
+    end;
+  end;
+end;
+
+function TfrmMain.isChildDevice (RootDevice: TDevice; TestMAC: TMAC; var Port: Integer): Boolean;
+var
+  i, n: Integer;
+begin
+  Port := -1;
+  n := Length(RootDevice.MACList);
+  Result := false;
+  for i := 0 to n-1 do
+    if RootDevice.MACList[i].MAC = TestMAC then begin
+      Result := true;
+      Port := RootDevice.MACList[i].Port;
+    end;
+end;
+function TfrmMain.isChildDevice (RootDevice: TDevice; TestMAC: TMAC): Boolean;
+var
+  Port: Integer;
+begin
+  Result := isChildDevice(RootDevice, TestMAC, Port);
+end;
+
+function TfrmMain.isChildDevice (RootDevice, TestDevice: TDevice; var Port: Integer): Boolean;
+var
+  i, n: Integer;
+begin
+  Port := -1;
+  n := Length(RootDevice.MACList);
+  Result := false;
+  for i := 0 to n-1 do
+    if RootDevice.MACList[i].MAC = TestDevice.MAC then begin
+      Result := true;
+      Port := RootDevice.MACList[i].Port;
+    end;
+end;
+function TfrmMain.isChildDevice (RootDevice, TestDevice: TDevice): Boolean;
+var
+  Port: Integer;
+begin
+  Result := isChildDevice (RootDevice, TestDevice, Port);
+end;
+
+function TfrmMain.getDeviceDescr (var Device: TDevice; Vlan: String = '1'): Boolean;
 var
   Reply: TsnmpReply;
   dDescr: array [0..4] of String;
@@ -103,7 +253,9 @@ begin
   Device.sysName := Value;
   SNMPGet(sysLocation, snmpRO, Device.IP, Value);
   Device.sysLocation := Value;
-  SNMPGet(dot1dBaseBridgeAddress, snmpRO, Device.IP, Value);
+  if (not SNMPGet(Concat(ipNetToMediaPhysAddress, '.', Vlan, '.', Device.IP) , snmpRO, Device.IP, Value)) or
+     (Length(Value) = 0) then
+    SNMPGet(dot1dBaseBridgeAddress, snmpRO, Device.IP, Value);
   Device.MAC := Value;
   Application.ProcessMessages;
 end;
@@ -128,7 +280,6 @@ begin
     if Ports.Count < 1 then Exit;
     i := 0;
     while i < Ports.Count do begin
-      Application.ProcessMessages;
       n := StrToInt(Ports.ValueFromIndex[i]);
       //if not ((n = 6) or (n = 135)) then
       if not (n = 6) then
@@ -139,23 +290,24 @@ begin
     SetLength(Device.Ports, Ports.Count);
     for i := 0 to Ports.Count-1 do
       Device.Ports[i].snmpID := Ports.Names[i];
+      Device.Ports[i].Weight := 0;
     //SetLength(OIDs, Ports.Count);
     LogEOL('.');
+    Application.ProcessMessages;
     // Get Descriptions
-    for i := 0 to High(Device.Ports) do begin
-      Application.ProcessMessages;
+    for i := 0 to High(Device.Ports) do begin      
       OID := ifDescr + '.' + Device.Ports[i].snmpID;
       if not SNMPGet(OID, Community, SNMPHost, Value) then Exit;
       Device.Ports[i].Descr := Value;
     end;
     LogEOL('.');
+    Application.ProcessMessages;
     // Get MAC
     for i := 0 to High(Device.Ports) do begin
-      Application.ProcessMessages;
       OID := ifPhysAddress + '.' + Device.Ports[i].snmpID;
       if not SNMPGet(OID, Community, SNMPHost, Value) then Exit;
       Device.Ports[i].MAC := Value;
-      SetLength(Device.Ports[i].MACList, 0);
+      //SetLength(Device.Ports[i].MACList, 0);
     end;
     LogEOL ('. ' + IntToStr(Ports.Count) + ' found.');
     Application.ProcessMessages;
@@ -168,20 +320,22 @@ begin
       if not SNMPGetBulk(OID, Community, SNMPHost, Ports) then Exit;
     end;
     LogEOL ('.');
-    for i := 0 to Ports.Count-1 do begin
-      Application.ProcessMessages;
-      n := StrToInt(Ports.ValueFromIndex[i]) - 1;
-      mac := MAC_oid2bin(Ports.Names[i]);
-      l := Length(Device.Ports[n].MACList);
-      SetLength(Device.Ports[n].MACList, l + 1);
-      Device.Ports[n].MACList[l] := mac;
-    end;
-    LogEOL(' ' + IntToStr(Ports.Count) + ' found.');
-    Application.ProcessMessages;
+    SetLength(Device.MACList, Ports.Count);
+    if Ports.Count > 0 then begin                
+      for i := 0 to Ports.Count-1 do begin        
+        n := StrToInt(Ports.ValueFromIndex[i]) - 1;
+        mac := MAC_oid2bin(Ports.Names[i]);
+        Device.MACList[i].Port := n;
+        Device.MACList[i].MAC := mac;
+      end;    
+    end else
+      SetLength(Device.MACList, 0);
+    LogEOL(' ' + IntToStr(Ports.Count) + ' found.');    
     Result := true;
   finally
     Ports.Free;
     if not Result then LogEOL(' Error!');
+    Application.ProcessMessages;
   end;
 end;
 
@@ -192,7 +346,7 @@ begin
   if ShowTime then
     strTime := TimeToStr(now()) + ': '
   else
-    strTime := '';
+    strTime := '    ';
   Memo.Lines.Add(strTime + msg);
 end;
 procedure TfrmMain.LogEOL(msg: String);
@@ -205,114 +359,153 @@ end;
 //  *** Actions
 procedure TfrmMain.mScanClick(Sender: TObject);
 var
-  rData, nData, cData, uData: ^TTreeData;
-  i, n, d, p, m: Integer;
-  nRoot, uNode, Node, cNode, tNode: PVirtualNode;
+  dataRoot, dataChild, dataPort, dataDevice, data, dataUnsorted, tData: ^TTreeData;
+  i, n, d, p, m, rootPort, devicePort: Integer;
+  nodeRoot, nodeChild, nodePort, nodeDevice, node, nodeUnsorted, tNode: PVirtualNode;
   List: TStringList;
+  nodesDevices: array of PVirtualNode;
+  macPort: TMAC;
+  Neighbors: array of PDevice;
 begin
   Log('Scanning Start', true);
+  vstDevices.Clear;
   ipRoot.IP := cfg.ReadString('General','IP','0.0.0.0');
   Log('  Root device: ' + ipRoot.IP);
   // Scan Root Device;
-  getDeviceDescr(ipRoot);
+  getDeviceDescr(ipRoot, mngtVlan);
   Log('    sysName: ' + ipRoot.sysName + '['+MAC_bin2str(ipRoot.MAC)+']');
   with vstDevices do begin
     BeginUpdate;
-    nRoot := AddChild(nil);
-    nData := GetNodeData(nRoot);
-    nData.Parent := nil;
-    nData.idx := -1;
-    nData.oType := otRootDevice;
-    FocusedNode := nRoot;
-    FullyVisible[nRoot] := True;
+    nodeRoot := AddChild(nil);
+    dataRoot := GetNodeData(nodeRoot);
+    ipRoot.Node := nodeRoot;
+    dataRoot.Parent := nil;
+    dataRoot.idx := -1;
+    dataRoot.oType := otRootDevice;    
+    FocusedNode := nodeRoot;
+    FullyVisible[nodeRoot] := True;
     EndUpdate;
   end;
 
-  getDevicePorts(ipRoot, mngtVlan);
-  for i := 0 to High(ipRoot.Ports) do
+  getDevicePorts(ipRoot, mngtVlan);  
     with vstDevices do begin
       BeginUpdate;
-      Node := AddChild(nRoot);
-      nData := GetNodeData(Node);
-      nData.Parent := nRoot;
-      nData.idx := i;
-      nData.oType := otPort;
-      FocusedNode := Node;
-      FullyVisible[Node] := True;
+      for i := 0 to High(ipRoot.Ports) do begin
+        nodePort := AddChild(nodeRoot);
+        dataPort := GetNodeData(nodePort);
+        ipRoot.Ports[i].Node := nodePort;
+        dataPort.Parent := nodeRoot;
+        dataPort.idx := i;
+        dataPort.oType := otPort;
+        FocusedNode := nodePort;
+        FullyVisible[nodePort] := True;
+      end;
       EndUpdate;
-      Application.ProcessMessages;
     end;
+  Application.ProcessMessages;
 
   // Scan Child Devices
   Log ('Scan child devices.', True);
-  uNode := vstDevices.AddChild(nil);
-  uData := vstDevices.GetNodeData(uNode);
-  uData.oType := otUnsorted;
+  nodeUnsorted := vstDevices.AddChild(nil);
+  dataUnsorted := vstDevices.GetNodeData(nodeUnsorted);
+  dataUnsorted.oType := otUnsorted;
+  dataUnsorted.idx := -1;
+  dataUnsorted.Parent := nil;
+
   List := TStringList.Create;
+  vstDevices.BeginUpdate;
   try
     List.Delimiter := ',';
     List.DelimitedText := cfg.ReadString('ipList', 'R01', ipRoot.IP);
-    if List.Count < 2 then Exit;
+    if List.Count < 1 then Exit;
     SetLength(ipRange, List.Count);
+
     for i := 0 to List.Count-1 do begin
-      Application.ProcessMessages;
       ipRange[i].IP := List[i];
       getDeviceDescr(ipRange[i]);
-      Node := vstDevices.GetFirstChild(nRoot);
+      vstDevices.BeginUpdate;
+
       with vstDevices do begin
-        BeginUpdate;
-        Node := AddChild(uNode);
-        nData := GetNodeData(Node);
-        nData.Parent := uNode;
-        nData.idx := i;
-        nData.oType := otDevice;
-        FocusedNode := Node;
-        FullyVisible[Node] := True;
-        EndUpdate;
+        if isChildDevice(ipRoot, ipRange[i], rootPort) then
+          tNode := ipRoot.Ports[rootPort].Node
+        else
+          tNode := nodeUnsorted;
+        nodeDevice := AddChild(tNode);
+        ipRange[i].Node := nodeDevice;
+        dataDevice := GetNodeData(nodeDevice);
+        dataDevice.Parent := nodeUnsorted;
+        dataDevice.idx := i;
+        dataDevice.oType := otDevice;
       end;
-      Application.ProcessMessages;
 
       getDevicePorts(ipRange[i]);
-      for p := 0 to High(ipRange[i].Ports) do
-        with vstDevices do begin
-          BeginUpdate;
-          cNode := AddChild(Node);
-          cData := GetNodeData(cNode);
-          cData.Parent := Node;
-          cData.idx := p;
-          cData.oType := otPort;
-          FocusedNode := cNode;
-          FullyVisible[cNode] := True;
-          EndUpdate;
-          Application.ProcessMessages;
-      end;
-    end;
-  finally
-    List.Free;
-  end;
-
-  Log ('Split child devices.', True);
-  Node := vstDevices.GetFirstChild(nRoot);
-  while not (Node = nil) do begin
-    nData := vstDevices.GetNodeData(Node);
-    // Scan unsorted;
-    cNode := vstDevices.GetFirstChild(uNode);
-    while not (cNode = nil) do begin
-      cData := vstDevices.GetNodeData(cNode);
-      tNode := vstDevices.GetNextSibling(cNode);
-      if Length(ipRoot.Ports[nData.idx].MACList) > 0 then
-        for m := 0 to High(ipRoot.Ports[nData.idx].MACList) do
-          if ipRange[cData.idx].MAC = ipRoot.Ports[nData.idx].MACList[m] then begin
-            vstDevices.MoveTo(cNode, Node, amAddChildLast, false);
-            vstDevices.FocusedNode := cNode;
-            vstDevices.FullyVisible[cNode] := True;
-            Break;
-          end;
-      cNode := tNode;
+      vstDevices.EndUpdate;
       Application.ProcessMessages;
     end;
-    Node := vstDevices.GetNextSibling(Node);
-  end;
+
+    // Sort Device Ports
+    vstDevices.BeginUpdate;
+    for p := 0 to High(ipRoot.Ports) do begin
+      nodePort := ipRoot.Ports[p].Node;
+      dataPort := vstDevices.GetNodeData(nodePort);
+      Log(Concat('Scan port: ', ipRoot.Ports[dataPort.idx].Descr, ' '));
+      macPort := ipRoot.Ports[dataPort.idx].MAC;
+
+      n := vstDevices.ChildCount[nodePort];
+      SetLength(nodesDevices, n);
+      SetLength(Neighbors, n);
+      nodeDevice := vstDevices.GetFirstChild(nodePort);
+      // Scan children
+      for i :=0  to n-1 do begin
+        nodesDevices[i] := nodeDevice;
+        dataDevice := vstDevices.GetNodeData(nodeDevice);
+        Neighbors[i] := @ipRange[dataDevice.idx];
+        nodeDevice := vstDevices.GetNextSibling(nodeDevice);
+      end;
+
+      // Sort Childs
+      FindPortWeights(ipRoot.MAC, Neighbors);
+      SortChilds(Neighbors);
+      tNode := nodePort;
+      vstDevices.BeginUpdate;
+      for i := 0 to High(Neighbors) do
+        with vstDevices do begin
+          nodeChild := AddChild(tNode);
+          dataChild := GetNodeData(nodeChild);
+          dataChild.idx := Neighbors[i].MaxPort;
+          dataChild.oType := otPort;
+          dataChild.Parent := Neighbors[i].Node;
+          MoveTo(Neighbors[i].Node, nodeChild, amAddChildLast, false);
+
+          {nodeDevice := AddChild(nodeChild);
+          dataDevice := GetNodeData(nodeDevice);
+          dataDevice.idx := 0;
+          dataDevice.oType := otDevice;
+          dataDevice.Parent := tNode;
+          nodeChild := AddChild(nodeDevice);}
+
+          nodeChild := AddChild(Neighbors[i].Node);
+          dataChild := GetNodeData(nodeChild);
+          dataChild.idx := Neighbors[i].MinPort;
+          dataChild.oType := otPort;
+          dataChild.Parent := Neighbors[i].Node;
+          tNode := nodeChild;
+        end;
+      vstDevices.EndUpdate;
+      {ScanChilds(nodePort, ipRoot.MAC, nodesDevices);
+      for i :=0  to n-1 do begin
+        dataDevice := vstDevices.GetNodeData(nodesDevices[i]);
+        ScanChilds(nodesDevices[i], ipRange[i].MAC, nodesDevices);
+      end;}
+      LogEOL(' Ok.');
+    end;
+    vstDevices.EndUpdate;
+    Application.ProcessMessages;
+  finally
+    List.Free;
+    vstDevices.EndUpdate;
+  end;  
+  // Sort Child Devices
 end;
 procedure TfrmMain.mToolsClick(Sender: TObject);
 begin
@@ -321,19 +514,16 @@ end;
 
 // *** Tree Events
 
-procedure TfrmMain.vstDevicesGetHint(Sender: TBaseVirtualTree;
-  Node: PVirtualNode; Column: TColumnIndex;
-  var LineBreakStyle: TVTTooltipLineBreakStyle; var HintText: string);
+procedure TfrmMain.vstDevicesDblClick(Sender: TObject);
 var
-  nData: ^TTreeData;
+  nodeClick: PVirtualNode;
 begin
-  nData := (Sender as TVirtualStringTree).GetNodeData(Node);
-  case nData.oType of
-    otRootDevice:
-      HintText := ipRoot.sysName + CrLf +
-                  ipRoot.sysDescr + CrLf +
-                  ipRoot.sysContact + CrLf +
-                  ipRoot.sysLocation;
+  with Sender as TVirtualStringTree do begin
+    nodeClick := FocusedNode;
+    if Expanded[nodeClick] then
+      FullCollapse(nodeClick)
+    else
+      FullExpand(nodeClick);
   end;
 end;
 
@@ -353,13 +543,27 @@ begin
       rData := (Sender as TVirtualStringTree).GetNodeData(nData.Parent);
       case rData.oType of
         otRootDevice:
-          CellText := ipRoot.Ports[nData.idx].Descr + ' [' + MAC_bin2str(ipRoot.Ports[nData.idx].MAC) + ']';
+          //CellText := ipRoot.Ports[nData.idx].Descr + ' [' + MAC_bin2str(ipRoot.Ports[nData.idx].MAC) + ']';
+          CellText := ipRoot.Ports[nData.idx].Descr;
         otDevice:
-          CellText := ipRange[rData.idx].Ports[nData.idx].Descr + ' [' + MAC_bin2str(ipRange[rData.idx].Ports[nData.idx].MAC) + ']';
+          //CellText := ipRange[rData.idx].Ports[nData.idx].Descr + ' [' + MAC_bin2str(ipRange[rData.idx].Ports[nData.idx].MAC) + ']';
+          CellText := ipRange[rData.idx].Ports[nData.idx].Descr;
       end;
     end;
     otUnsorted:
       CellText := 'Unsorted';
   end;
 end;
+
+procedure TfrmMain.vstDevicesNodeDblClick(Sender: TBaseVirtualTree;
+  const HitInfo: THitInfo);
+begin
+  with Sender as TVirtualStringTree do begin
+    if Expanded[HitInfo.HitNode] then
+      FullCollapse(HitInfo.HitNode)
+    else
+      FullExpand(HitInfo.HitNode);
+  end;
+end;
+
 end.
