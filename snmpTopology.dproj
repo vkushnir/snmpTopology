@@ -88,12 +88,12 @@
         <VerInfo_MajorVer>0</VerInfo_MajorVer>
         <VerInfo_MinorVer>1</VerInfo_MinorVer>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <VerInfo_Release>1</VerInfo_Release>
+        <VerInfo_Release>2</VerInfo_Release>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <DCC_Optimize>false</DCC_Optimize>
-        <VerInfo_Build>4</VerInfo_Build>
+        <VerInfo_Build>6</VerInfo_Build>
         <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
-        <VerInfo_Keys>CompanyName=Vladimir Kushnir aka Kvantum;FileDescription=Scan network topology;FileVersion=0.1.1.4;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=Working only with structure where CISCO switch is root and others are ZyXEL</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=Vladimir Kushnir aka Kvantum;FileDescription=Scan network topology;FileVersion=0.1.2.6;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=Working only with structure where CISCO switch is root and others are ZyXEL</VerInfo_Keys>
     </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
