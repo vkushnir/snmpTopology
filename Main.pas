@@ -7,7 +7,7 @@ uses
   System.SysUtils, System.Variants, System.Classes, System.IniFiles,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus,
   VirtualTrees,
-  Utils;
+  Utils, Vcl.ImgList;
 
 type
   objType = (otRootDevice, otDevice, otPort, otUnsorted);
@@ -16,6 +16,7 @@ type
     oType: objType;
     Parent: PVirtualNode;
   end;
+  PTreeData = ^TTreeData;
   TsnmpReply = array of String;
   TIP = String[15];
   TPort = record
@@ -47,15 +48,18 @@ type
     mTools: TMenuItem;
     mFile: TMenuItem;
     mExit: TMenuItem;
+    Icons: TImageList;
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure mScanClick(Sender: TObject);
     procedure vstDevicesGetText(Sender: TBaseVirtualTree; Node: PVirtualNode;
       Column: TColumnIndex; TextType: TVSTTextType; var CellText: string);
     procedure mToolsClick(Sender: TObject);
-    procedure vstDevicesDblClick(Sender: TObject);
     procedure vstDevicesNodeDblClick(Sender: TBaseVirtualTree;
       const HitInfo: THitInfo);
+    procedure vstDevicesGetImageIndex(Sender: TBaseVirtualTree;
+      Node: PVirtualNode; Kind: TVTImageKind; Column: TColumnIndex;
+      var Ghosted: Boolean; var ImageIndex: Integer);
   private
     cfg: TINIFile;
     snmpVersion: Integer;
@@ -477,13 +481,6 @@ begin
           dataChild.Parent := Neighbors[i].Node;
           MoveTo(Neighbors[i].Node, nodeChild, amAddChildLast, false);
 
-          {nodeDevice := AddChild(nodeChild);
-          dataDevice := GetNodeData(nodeDevice);
-          dataDevice.idx := 0;
-          dataDevice.oType := otDevice;
-          dataDevice.Parent := tNode;
-          nodeChild := AddChild(nodeDevice);}
-
           nodeChild := AddChild(Neighbors[i].Node);
           dataChild := GetNodeData(nodeChild);
           dataChild.idx := Neighbors[i].MinPort;
@@ -492,11 +489,6 @@ begin
           tNode := nodeChild;
         end;
       vstDevices.EndUpdate;
-      {ScanChilds(nodePort, ipRoot.MAC, nodesDevices);
-      for i :=0  to n-1 do begin
-        dataDevice := vstDevices.GetNodeData(nodesDevices[i]);
-        ScanChilds(nodesDevices[i], ipRange[i].MAC, nodesDevices);
-      end;}
       LogEOL(' Ok.');
     end;
     vstDevices.EndUpdate;
@@ -504,8 +496,7 @@ begin
   finally
     List.Free;
     vstDevices.EndUpdate;
-  end;  
-  // Sort Child Devices
+  end;
 end;
 procedure TfrmMain.mToolsClick(Sender: TObject);
 begin
@@ -514,16 +505,19 @@ end;
 
 // *** Tree Events
 
-procedure TfrmMain.vstDevicesDblClick(Sender: TObject);
+procedure TfrmMain.vstDevicesGetImageIndex(Sender: TBaseVirtualTree;
+  Node: PVirtualNode; Kind: TVTImageKind; Column: TColumnIndex;
+  var Ghosted: Boolean; var ImageIndex: Integer);
 var
-  nodeClick: PVirtualNode;
+  NodeData: PTreeData;
 begin
   with Sender as TVirtualStringTree do begin
-    nodeClick := FocusedNode;
-    if Expanded[nodeClick] then
-      FullCollapse(nodeClick)
-    else
-      FullExpand(nodeClick);
+    NodeData := GetNodeData(Node);
+    case NodeData.oType of
+      otRootDevice: ImageIndex := 0;
+      otDevice: ImageIndex := 1;
+      otPort: ImageIndex := 2;
+    end;
   end;
 end;
 
@@ -531,7 +525,7 @@ procedure TfrmMain.vstDevicesGetText(Sender: TBaseVirtualTree;
   Node: PVirtualNode; Column: TColumnIndex; TextType: TVSTTextType;
   var CellText: string);
 var
-  nData, rData: ^TTreeData;
+  nData, rData: PTreeData;
 begin
   nData := (Sender as TVirtualStringTree).GetNodeData(Node);
   case nData.oType of
