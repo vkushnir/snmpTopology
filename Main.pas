@@ -614,7 +614,7 @@ begin
           CellText := ipRoot.Ports[nData.idx].Descr;
         otDevice:
           //CellText := ipRange[rData.idx].Ports[nData.idx].Descr + ' [' + MAC_bin2str(ipRange[rData.idx].Ports[nData.idx].MAC) + ']';
-          CellText := ipRange[rData.idx].Ports[nData.idx].Descr;
+          CellText := Concat(ipRange[rData.idx].Ports[nData.idx].Descr, ' (', Format('%.*d', [2, nData.idx + 1]), ')');
       end;
     end;
     otUnsorted:
