@@ -193,22 +193,6 @@ begin
       end;
     end;
   end;
-{  for d := 0 to High(Neighbors) do begin
-    for m := 0 to High(ipRange[Neighbors[d]].MACList) do begin
-      for i := 0 to High(Neighbors) do begin
-        if (i <> d) and (ipRange[Neighbors[d]].MACList[m].MAC = ipRange[Neighbors[i]].MAC) then
-          Dec(ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight);
-      end;
-    end;
-  end;
-  for d := 0 to High(Neighbors) do begin
-    for m := 0 to High(ipRange[Neighbors[d]].MACList) do begin
-      if ipRange[Neighbors[d]].MACList[m].MAC = rootMAC then begin
-        ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight := ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight * -1;
-        Inc(ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight);
-      end;
-    end;
-  end;}
   for i := 0 to High(Neighbors) do begin
     ipRange[Neighbors[i]].MaxPort := MaxPort(ipRange[Neighbors[i]]);
     ipRange[Neighbors[i]].MinPort := MinPort(ipRange[Neighbors[i]]);
@@ -318,7 +302,7 @@ begin
     LogEOL('.');
     Application.ProcessMessages;
     // Get Descriptions
-    for i := 0 to High(Device.Ports) do begin      
+    for i := 0 to High(Device.Ports) do begin
       OID := ifDescr + '.' + Device.Ports[i].snmpID;
       if not SNMPGet(OID, snmpRO, Device.IP, Value) then Exit;
       Device.Ports[i].Descr := Value;
@@ -335,25 +319,6 @@ begin
     LogEOL ('. ' + IntToStr(Ports.Count) + ' found.');
     Application.ProcessMessages;
 
-{    Log('Scan MAC table for ' + Device.IP + ' [' + MAC_bin2str(Device.MAC) + '] .. ');
-    OID := dot1dTpFdbPort;
-    if Length(Vlan) > 0 then begin
-      if not SNMPGetBulk(OID, Community, SNMPHost, Ports, Vlan) then Exit;
-    end else begin
-      if not SNMPGetBulk(OID, Community, SNMPHost, Ports) then Exit;
-    end;
-    LogEOL ('.');
-    SetLength(Device.MACList, Ports.Count);
-    if Ports.Count > 0 then begin
-      for i := 0 to Ports.Count-1 do begin
-        n := StrToInt(Ports.ValueFromIndex[i]) - 1;
-        mac := MAC_oid2bin(Ports.Names[i]);
-        Device.MACList[i].Port := n;
-        Device.MACList[i].MAC := mac;
-      end;
-    end else
-      SetLength(Device.MACList, 0);
-    LogEOL(' ' + IntToStr(Ports.Count) + ' found.');  }
     Result := true;
   finally
     Ports.Free;
@@ -542,7 +507,8 @@ begin
           CellText := ipRoot.Ports[nData.idx].Descr;
         otDevice:
           //CellText := ipRange[rData.idx].Ports[nData.idx].Descr + ' [' + MAC_bin2str(ipRange[rData.idx].Ports[nData.idx].MAC) + ']';
-          CellText := Concat(ipRange[rData.idx].Ports[nData.idx].Descr, ' (', Format('%.*d', [2, nData.idx + 1]), ')');
+          //CellText := Concat(ipRange[rData.idx].Ports[nData.idx].Descr, ' (', Format('%.*d', [2, nData.idx + 1]), ')');
+          CellText := Format('P%.*d [%d]', [2, nData.idx + 1, ipRange[rData.idx].Ports[nData.idx].Weight]);
       end;
     end;
     otUnsorted:
