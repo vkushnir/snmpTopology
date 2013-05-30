@@ -7,7 +7,7 @@ uses
   System.SysUtils, System.Variants, System.Classes, System.IniFiles,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Menus,
   VirtualTrees,
-  Utils, Vcl.ImgList;
+  Utils, Vcl.ImgList, Vcl.ExtCtrls;
 
 type
   objType = (otNone, otRootDevice, otDevice, otPort, otUnsorted);
@@ -53,6 +53,7 @@ type
     mFile: TMenuItem;
     mExit: TMenuItem;
     Icons: TImageList;
+    Splitter1: TSplitter;
     procedure FormCreate(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure mScanClick(Sender: TObject);
@@ -176,6 +177,23 @@ var
   i, m, d: Integer;
 begin
   for d := 0 to High(Neighbors) do begin
+    for i := 0 to High(Neighbors) do begin
+      if i <> d then
+        for m := 0 to High(ipRange[Neighbors[d]].MACList) do begin
+          if ipRange[Neighbors[d]].MACList[m].MAC = ipRange[Neighbors[i]].MAC then
+            Dec(ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight);
+        end;
+    end;
+  end;
+  for d := 0 to High(Neighbors) do begin
+    for m := 0 to High(ipRange[Neighbors[d]].MACList) do begin
+      if ipRange[Neighbors[d]].MACList[m].MAC = rootMAC then begin
+        ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight := - ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight;
+        Inc(ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight);
+      end;
+    end;
+  end;
+{  for d := 0 to High(Neighbors) do begin
     for m := 0 to High(ipRange[Neighbors[d]].MACList) do begin
       for i := 0 to High(Neighbors) do begin
         if (i <> d) and (ipRange[Neighbors[d]].MACList[m].MAC = ipRange[Neighbors[i]].MAC) then
@@ -190,7 +208,7 @@ begin
         Inc(ipRange[Neighbors[d]].Ports[ipRange[Neighbors[d]].MACList[m].Port].Weight);
       end;
     end;
-  end;
+  end;}
   for i := 0 to High(Neighbors) do begin
     ipRange[Neighbors[i]].MaxPort := MaxPort(ipRange[Neighbors[i]]);
     ipRange[Neighbors[i]].MinPort := MinPort(ipRange[Neighbors[i]]);
@@ -484,96 +502,6 @@ begin
     HasChildren[nodeRoot] := Length(ipRoot.Ports) > 0;
     EndUpdate;
   end;
-
-  // Scan Child Devices
-{  Log ('Scan child devices.', True);
-  nodeUnsorted := vstDevices.AddChild(nil);
-  dataUnsorted := vstDevices.GetNodeData(nodeUnsorted);
-  dataUnsorted.oType := otUnsorted;
-  dataUnsorted.idx := -1;
-  dataUnsorted.Parent := nil;
-
-  List := TStringList.Create;
-  vstDevices.BeginUpdate;
-  try
-    List.Delimiter := ',';
-    List.DelimitedText := cfg.ReadString('ipList', 'R01', ipRoot.IP);
-    if List.Count < 1 then Exit;
-    SetLength(ipRange, List.Count);
-
-    for i := 0 to List.Count-1 do begin
-      ipRange[i].IP := List[i];
-      getDeviceDescr(ipRange[i]);
-      vstDevices.BeginUpdate;
-
-      with vstDevices do begin
-        if isChildDevice(ipRoot, ipRange[i], rootPort) then
-          tNode := ipRoot.Ports[rootPort].Node
-        else
-          tNode := nodeUnsorted;
-        nodeDevice := AddChild(tNode);
-        ipRange[i].Node := nodeDevice;
-        dataDevice := GetNodeData(nodeDevice);
-        dataDevice.Parent := nodeUnsorted;
-        dataDevice.idx := i;
-        dataDevice.oType := otDevice;
-      end;
-
-      getDevicePorts(ipRange[i]);
-      vstDevices.EndUpdate;
-      Application.ProcessMessages;
-    end;
-
-    // Sort Device Ports
-    vstDevices.BeginUpdate;
-    for p := 0 to High(ipRoot.Ports) do begin
-      nodePort := ipRoot.Ports[p].Node;
-      dataPort := vstDevices.GetNodeData(nodePort);
-      Log(Concat('Scan port: ', ipRoot.Ports[dataPort.idx].Descr, ' '));
-      macPort := ipRoot.Ports[dataPort.idx].MAC;
-
-      n := vstDevices.ChildCount[nodePort];
-      SetLength(nodesDevices, n);
-      SetLength(Neighbors, n);
-      nodeDevice := vstDevices.GetFirstChild(nodePort);
-      // Scan children
-      for i :=0  to n-1 do begin
-        nodesDevices[i] := nodeDevice;
-        dataDevice := vstDevices.GetNodeData(nodeDevice);
-        Neighbors[i] := @ipRange[dataDevice.idx];
-        nodeDevice := vstDevices.GetNextSibling(nodeDevice);
-      end;
-
-      // Sort Childs
-      FindPortWeights(ipRoot.MAC, Neighbors);
-      SortChilds(Neighbors);
-      tNode := nodePort;
-      vstDevices.BeginUpdate;
-      for i := 0 to High(Neighbors) do
-        with vstDevices do begin
-          nodeChild := AddChild(tNode);
-          dataChild := GetNodeData(nodeChild);
-          dataChild.idx := Neighbors[i].MaxPort;
-          dataChild.oType := otPort;
-          dataChild.Parent := Neighbors[i].Node;
-          MoveTo(Neighbors[i].Node, nodeChild, amAddChildLast, false);
-
-          nodeChild := AddChild(Neighbors[i].Node);
-          dataChild := GetNodeData(nodeChild);
-          dataChild.idx := Neighbors[i].MinPort;
-          dataChild.oType := otPort;
-          dataChild.Parent := Neighbors[i].Node;
-          tNode := nodeChild;
-        end;
-      vstDevices.EndUpdate;
-      LogEOL(' Ok.');
-    end;
-    vstDevices.EndUpdate;
-    Application.ProcessMessages;
-  finally
-    List.Free;
-    vstDevices.EndUpdate;
-  end;}
 end;
 
 // *** Tree Events

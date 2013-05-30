@@ -17,11 +17,21 @@ object frmMain: TfrmMain
   OnCreate = FormCreate
   PixelsPerInch = 96
   TextHeight = 13
+  object Splitter1: TSplitter
+    Left = 0
+    Top = 453
+    Width = 704
+    Height = 3
+    Cursor = crVSplit
+    Align = alBottom
+    ExplicitTop = 0
+    ExplicitWidth = 376
+  end
   object Memo: TMemo
     Left = 0
-    Top = 376
+    Top = 456
     Width = 704
-    Height = 186
+    Height = 106
     Hint = 'Log Records'
     Align = alBottom
     ScrollBars = ssVertical
@@ -31,7 +41,7 @@ object frmMain: TfrmMain
     Left = 0
     Top = 0
     Width = 704
-    Height = 376
+    Height = 453
     Hint = 'Device Tree'
     Align = alClient
     Header.AutoSizeIndex = 0
@@ -49,6 +59,7 @@ object frmMain: TfrmMain
     OnGetImageIndex = vstDevicesGetImageIndex
     OnInitChildren = vstDevicesInitChildren
     OnNodeClick = vstDevicesNodeClick
+    ExplicitHeight = 376
     Columns = <>
   end
   object Menu: TMainMenu
@@ -74,7 +85,7 @@ object frmMain: TfrmMain
     Left = 40
     Top = 8
     Bitmap = {
-      494C010103000800140010001000FF00FF000910FFFFFFFFFFFFFFFF424D3604
+      494C0101030008001C0010001000FF00FF000910FFFFFFFFFFFFFFFF424D3604
       0000000000003604000028000000400000001000000001000800000000000004
       0000000000000000000000000000000000000000000000008000008000000080
       8000800000008000800080800000C0C0C000C0DCC000F0CAA600330000000000
